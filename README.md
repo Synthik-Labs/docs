@@ -1,8 +1,8 @@
-# Synthik SDK Client Documentation 
+# Synthik SDK Client Documentation
 
-Welcome to the official Synthik SDK\! This repository provides powerful, well-typed clients for both **Python** and **TypeScript** to seamlessly integrate with the Synthik Labs API for synthetic data generation.
+Welcome to the official documentation for the Synthik SDK\! This repository provides powerful, well-typed clients for both **Python** and **TypeScript** to seamlessly integrate with the Synthik Labs API for synthetic data generation.
 
-Whether you're working in a Python backend or a TypeScript/JavaScript project, our SDKs are designed to be intuitive, robust, and easy to use.
+This document is structured to guide you from installation and authentication to advanced usage for each SDK.
 
 -----
 
@@ -18,195 +18,288 @@ Install the client from PyPI using pip:
 pip install synthik-client
 ```
 
-### 2\. Client Initialization
+### 2\. Available Imports
 
-Import and instantiate the client. The client can be configured with your API key, a custom base URL, and other options.
-
-```python
-from synthik import SynthikClient
-
-# Initialize with default settings (API key can be set via an environment variable)
-client = SynthikClient()
-```
-
-### 3\. Available Imports
-
-The SDK exposes several key classes to help you build generation requests:
+The `synthik` package exposes the following classes for direct import:
 
 ```python
-from synthik import SynthikClient
-from synthik.types import (
-    ColumnBuilder, # A fluent helper for defining columns
-    DatasetGenerationRequest, # Request object for tabular data
-    TextDatasetGenerationRequest, # Request object for text data
-    ColumnDescription # The underlying data class for a column
+from synthik import (
+    SynthikClient,
+    ColumnBuilder,
+    DatasetGenerationRequest,
+    TextDatasetGenerationRequest,
+    ColumnDescription
 )
 ```
 
-### 4\. Generating Tabular Data
+  * `SynthikClient`: The main entry point for interacting with the API.
+  * `ColumnBuilder`: A fluent helper for defining columns with specific types and constraints.
+  * `DatasetGenerationRequest`: The request object for generating tabular data.
+  * `TextDatasetGenerationRequest`: The request object for generating text-based data.
+  * `ColumnDescription`: The underlying data class for a column definition.
 
-To generate synthetic tabular data, create a `DatasetGenerationRequest` and use the `client.tabular.generate()` method. The **`ColumnBuilder`** provides a convenient, fluent interface for defining your schema.
+### 3\. Initialization and Configuration
 
-#### Example: Generating User Profiles
+First, import and instantiate the client. It is highly recommended to specify `api_version="v2"` to use the latest features, as v1 is deprecated.
 
 ```python
 from synthik import SynthikClient
-from synthik.types import ColumnBuilder, DatasetGenerationRequest, TextDatasetGenerationRequest
 
-client = SynthikClient()
+# Initialize the client for API v2
+client = SynthikClient(api_version="v2")
 
-# Tabular
-req = DatasetGenerationRequest(
+# If you already have an API key, you can provide it directly
+client = SynthikClient(api_version="v2", api_key="YOUR_API_KEY")
+```
+
+### 4\. Authentication
+
+The `client.auth` module handles user registration, login, and token management. The typical flow is to register an account and then log in to obtain an API key (token) for subsequent requests.
+
+```python
+# Step 1: Register a new user (only needs to be done once)
+try:
+    client.auth.register("user@example.com", "a-strong-password")
+    print("Registration successful!")
+except Exception as e:
+    print(f"Registration failed: {e}")
+
+# Step 2: Log in to get an API token
+try:
+    auth_response = client.auth.login("user@example.com", "a-strong-password")
+    api_token = auth_response.get("token")
+    print(f"Successfully logged in. API Token: {api_token[:10]}...")
+
+    # Step 3: Use this token to initialize a new client for data generation
+    authed_client = SynthikClient(api_version="v2", api_key=api_token)
+except Exception as e:
+    print(f"Login failed: {e}")
+```
+
+### 5\. Usage Examples
+
+Once your client is initialized with a valid API key, you can generate synthetic data.
+
+#### Tabular Data Generation
+
+```python
+from synthik.types import ColumnBuilder, DatasetGenerationRequest
+
+# Assumes 'authed_client' is an authenticated client instance
+tabular_req = DatasetGenerationRequest(
     num_rows=100,
-    topic="User profiles",
+    topic="User profiles for an e-commerce platform",
     columns=[
         ColumnBuilder.string("full_name", description="User's full name").build(),
         ColumnBuilder.int("age", description="Age in years", constraints={"min": 18, "max": 90}).build(),
-        ColumnBuilder.categorical("country", ["US", "CA", "GB"]).build(),
         ColumnBuilder.email().build(),
-    ]
+    ],
+    seed=42,
 )
-result = client.tabular.generate(req)
-print(result["metadata"])  # when format=json
+
+tabular_json = authed_client.tabular.generate(tabular_req, format="json")
+print(tabular_json["metadata"])
 ```
 
-### 5\. Generating Text Data
-
-For NLP tasks, you can generate text data using `client.text.generate()`.
-
-#### Example: Generating Product Reviews
+#### Text Data Generation
 
 ```python
+from synthik.types import TextDatasetGenerationRequest
+
+# Assumes 'authed_client' is an authenticated client instance
 text_req = TextDatasetGenerationRequest(
     num_samples=10,
     task_definition="sentiment analysis",
     data_domain="e-commerce",
     data_description="product reviews",
     output_format="instruction",
+    sample_examples=[{"instruction": "Classify sentiment", "input": "Love it", "output": "positive"}],
 )
-text_data = client.text.generate(text_req)
-print(text_data.metadata)
+text_dataset = authed_client.text.generate(text_req)
+print(text_dataset.metadata)
 ```
 
-### 6\. Other Endpoints
+### 6\. API Reference
 
-The client also provides access to other utility endpoints:
+#### Auth Module
 
-  * `client.tabular.strategies()`: Get available generation strategies.
-  * `client.tabular.analyze(req)`: Analyze a generation request.
-  * `client.tabular.validate(data, columns)`: Validate data against a schema.
-  * `client.text.info()`: Get information about the text generation service.
+| Method | Description |
+| :--- | :--- |
+| `register(email, password)` | Create a new user account. |
+| `login(email, password)` | Authenticate and receive an API token. |
+| `validate_token(token)` | Check if a given token is valid. |
+| `list_tokens(include_revoked?, include_expired?)`| List all tokens for the current user. |
+| `revoke(token)` | Revoke a token by its value. |
+| `revoke_by_id(token_id)` | Revoke a token by its numeric ID. |
+| `me()` | Retrieve the profile of the current user. |
+
+#### Tabular Module
+
+| Method | Description |
+| :--- | :--- |
+| `generate(req, ...)` | Generates data. Formats: `json`, `csv`, `parquet`, `arrow`, `excel`. |
+| `strategies()` | Lists available data generation strategies. |
+| `analyze(req)` | Performs a pre-flight analysis of your generation request. |
+| `validate(data, columns)` | Validates that data conforms to a given schema. |
+
+#### Text Module
+
+| Method | Description |
+| :--- | :--- |
+| `generate(req)` | Generates a dataset of text samples. |
+| `info()` | Retrieves capability information about the text models. |
+| `validate(req)` | Validates a text generation request without generating. |
+| `examples()` | Returns a list of sample tasks to help you get started. |
 
 -----
 
 ## TypeScript SDK 📜
 
-A minimal, fully-typed TypeScript client for the Synthik Labs API.
+A minimal, fully-typed TypeScript client for the Synthik Labs backend.
 
 ### 1\. Installation
 
 Install the client from npm:
 
 ```bash
-npm install synthik-client
-# or
-pnpm add synthik-client
-# or
-yarn add synthik-client
+npm install @synthik/client
 ```
 
-### 2\. Client Initialization
+### 2\. Available Imports
 
-Import and instantiate the client. The base URL is pre-configured, but you can provide an API key and other options.
-
-```ts
-import SynthikClient from "synthik-client";
-
-// Initialize with default settings
-const client = new SynthikClient();
-```
-
-### 3\. Available Imports
-
-The SDK is fully typed and exports all necessary interfaces and classes for a seamless development experience.
+The `@synthik/client` package provides a default export for the client, named exports for builders, and type exports for all request/response objects.
 
 ```ts
 import SynthikClient, {
-  ColumnBuilder, // A fluent helper for defining columns
-  type DatasetGenerationRequest, // Type for tabular generation requests
-  type TextDatasetGenerationRequest, // Type for text generation requests
+  ColumnBuilder,
+  type DatasetGenerationRequest,
+  type TextDatasetGenerationRequest,
   type ColumnDescription,
-  type GenerationStrategy,
-  type TabularExportFormat,
-} from "synthik-client";
+  type TabularExportFormat
+} from "@synthik/client";
 ```
 
-### 4\. Generating Tabular Data
+  * `SynthikClient`: The main client class (default export).
+  * `ColumnBuilder`: A fluent helper for defining data schemas.
+  * `DatasetGenerationRequest`, `TextDatasetGenerationRequest`, etc.: TypeScript types for full type-safety when building requests.
 
-Create a `DatasetGenerationRequest` object and pass it to the `client.tabular.generate()` method.
+### 3\. Initialization and Configuration
 
-#### Example: Generating User Profiles
+Import and instantiate the client. Set `apiVersion: 'v2'` in the options to use the latest API, as v1 is deprecated and will trigger a console warning.
 
 ```ts
-import SynthikClient, { ColumnBuilder, type DatasetGenerationRequest } from "synthik-client";
+import SynthikClient from "@synthik/client";
 
-const client = new SynthikClient();
+// Initialize the client for API v2
+const client = new SynthikClient({ apiVersion: 'v2' });
 
-const req: DatasetGenerationRequest = {
+// If you already have an API key, provide it directly
+const client = new SynthikClient({ apiVersion: 'v2', apiKey: 'YOUR_API_KEY' });
+```
+
+### 4\. Authentication
+
+The `client.auth` module handles user registration and login. You can use these methods to get an API key that you can then use to initialize an authenticated client instance.
+
+```ts
+async function getAuthenticatedClient(): Promise<SynthikClient> {
+  const client = new SynthikClient({ apiVersion: 'v2' });
+
+  try {
+    // Step 1: Register (optional, only needs to be done once)
+    await client.auth.register("user@example.com", "a-strong-password");
+    console.log("Registration successful!");
+  } catch (e) {
+    console.error("Registration might have failed (or user already exists)", e);
+  }
+
+  // Step 2: Log in to get a token
+  const authResponse = await client.auth.login("user@example.com", "a-strong-password");
+  const apiToken = authResponse.token;
+  console.log("Login successful!");
+
+  // Step 3: Return a new client instance configured with the API token
+  return new SynthikClient({ apiVersion: 'v2', apiKey: apiToken });
+}
+
+// Usage:
+const authedClient = await getAuthenticatedClient();
+```
+
+### 5\. Usage Examples
+
+Once you have an authenticated client, you can generate data.
+
+#### Tabular Data Generation
+
+```ts
+import { ColumnBuilder, type DatasetGenerationRequest } from "@synthik/client";
+
+// Assumes 'authedClient' is an authenticated client instance from the example above
+const tabularReq: DatasetGenerationRequest = {
   num_rows: 50,
   topic: "User profiles",
   columns: [
-    ColumnBuilder.string("full_name", { description: "User's full name", max_length: 80 }).build(),
-    ColumnBuilder.int("age", { description: "Age in years", constraints: { min: 18, max: 90 } }).build(),
-    ColumnBuilder.categorical("country", ["US", "CA", "GB"]).build(),
+    ColumnBuilder.string("full_name").build(),
+    ColumnBuilder.int("age", { constraints: { min: 18, max: 90 } }).build(),
     ColumnBuilder.email().build(),
   ],
 };
 
-// Generate the data, specifying strategy and format
-const result = await client.tabular.generate(req, { strategy: "adaptive_flow", format: "json" });
-console.log(result);
+const tabularData = await authedClient.tabular.generate(tabularReq);
+console.log(tabularData.metadata);
 ```
 
-### 5\. Generating Text Data
-
-To generate text data, construct a `TextDatasetGenerationRequest` and use the `client.text.generate()` method.
-
-#### Example: Generating Customer Support Conversations
+#### Text Data Generation
 
 ```ts
-const text = await client.text.generate({
+import { type TextDatasetGenerationRequest } from "@synthik/client";
+
+// Assumes 'authedClient' is an authenticated client instance
+const textReq: TextDatasetGenerationRequest = {
   num_samples: 5,
   task_definition: "sentiment analysis of product reviews",
   data_domain: "e-commerce",
   data_description: "Product reviews with positive/negative/neutral",
   output_format: "instruction",
   sample_examples: [
-    {
-      instruction: "Analyze the sentiment of this product review",
-      input: "This phone has amazing battery life and great camera quality!",
-      output: "positive",
-    },
-  ],
-});
-console.log(text);
+    { instruction: "Analyze sentiment", input: "Great battery life", output: "positive" }
+  ]
+};
+const text = await authedClient.text.generate(textReq);
+console.log(text.metadata);
 ```
 
-### 6\. Other Endpoints
+### 6\. API Reference
 
-The TypeScript client also provides typed methods for other API endpoints:
+The following tables provide a quick reference for the methods available in each module.
 
-  * `client.tabular.strategies()`
-  * `client.tabular.analyze(request)`
-  * `client.tabular.validate(body)`
-  * `client.text.info()`
-  * `client.text.examples()`
+#### Auth Module
 
------
+| Method | Description |
+| :--- | :--- |
+| `register(email, password)` | Create a new user account. |
+| `login(email, password)` | Authenticate and get an auth token. |
+| `validateToken(token?)` | Validate the current or a provided token. |
+| `listTokens(includeRevoked?, includeExpired?)` | List all tokens for the user. |
+| `revoke(token)` | Revoke a token by its value. |
+| `revokeById(token_id)` | Revoke a token by its numeric ID. |
+| `me()` | Get the current user's profile. |
 
-### Best Practices for Using the SDKs
+#### Tabular Module
 
-  * **Be Descriptive**: For both tabular and text generation, the quality of the synthetic data is highly dependent on the quality of your descriptions (`topic`, `description`, `task_definition`, etc.). Provide as much context as you can.
-  * **Use Constraints**: When generating tabular data, leverage `constraints` (`min`, `max`, `regex`, etc.) to ensure the data fits your exact requirements.
-  * **Handle Asynchronicity (TypeScript)**: All TypeScript client methods are `async` and return a `Promise`. Always use `await` or `.then()` to handle the results.
-  * **Choose the Right Format**: The `tabular.generate` method supports multiple output formats (`json`, `csv`, `parquet`). Choose the one that best integrates with your data pipeline.
+| Method | Description |
+| :--- | :--- |
+| `generate(req, opts?)` | Unified generate method. Opts: `{ strategy?, format?, batch_size? }`. |
+| `strategies()` | Retrieve available generation strategies. |
+| `analyze(req)` | Pre-flight analysis of a generation request. |
+| `validate({ data, schema })`| Validate data rows against a schema. |
+
+#### Text Module
+
+| Method | Description |
+| :--- | :--- |
+| `generate(req)` | Unified text generation method. |
+| `info()` | Get model and capability information. |
+| `validate(req)` | Validate a text generation request. |
+| `examples()` | Retrieve sample example tasks. |
